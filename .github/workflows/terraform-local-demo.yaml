@@ -21,10 +21,11 @@ jobs:
       - name: Terraform Validate
         run: terraform -chdir=terraform validate
 
-      - name: TFLint (Static Analysis)
-        run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-          tflint --chdir=terraform
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v3
+
+      - name: Run TFLint
+        run: tflint --chdir=terraform
 
   security:
     name: Security Scan (Checkov)
