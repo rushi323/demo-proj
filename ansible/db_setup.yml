@@ -1,0 +1,20 @@
+- name: Demo PostgreSQL Setup (Mock)
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Pretend to install PostgreSQL
+      debug:
+        msg: "PostgreSQL would be installed here"
+
+    - name: Pretend to ensure PostgreSQL is running
+      debug:
+        msg: "PostgreSQL service would be started here"
+
+    - name: Pretend to create DB user
+      debug:
+        msg: "Database user 'demo_user' would be created"
+
+    - name: Pretend to create application database
+      debug:
+        msg: "Database 'demo_db' owned by 'demo_user' would be created"
