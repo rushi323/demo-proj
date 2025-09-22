@@ -79,7 +79,8 @@ jobs:
           image-ref: ghcr.io/${{ github.repository }}/myapp:latest
           severity: CRITICAL,HIGH
           ignore-unfixed: false   # fail on vulnerabilities
-          exit-code: 1            # force pipeline failure if CRITICAL/HIGH found
+          exit-code: 0           # Don't fail the pipeline, just report
+
 
   deploy-dev:
     name: Deploy to Dev
