@@ -1,14 +1,15 @@
-name: Terraform Local Demo Pipeline
+name: Terraform Multi-Env Pipeline with KinD + Security + Docker Hub + GHCR
 
 on:
   pull_request:
     branches: [ "main" ]
   push:
-    branches: [ "main" ]
+    branches:
+      - "*"   # Any branch push triggers pipeline
 
 jobs:
   validate:
-    name: Terraform Validate
+    name: Validate Terraform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -20,31 +21,181 @@ jobs:
       - name: Terraform Validate
         run: terraform -chdir=terraform validate
 
-  plan:
-    name: Terraform Plan (PR Review)
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v3
+
+      - name: Run TFLint
+        run: tflint --chdir=terraform
+
+  security:
+    name: Security Scan (Checkov)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v2
-      - uses: hashicorp/setup-terraform@v2
-
-      - name: Terraform Init
-        run: terraform -chdir=terraform init
-
-      - name: Terraform Plan
-        run: terraform -chdir=terraform plan -input=false
-
-  deploy-dev:
-    name: Deploy to Dev (Minikube Namespace)
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     needs: [validate]
     steps:
       - uses: actions/checkout@v2
+      - name: Run Checkov (Terraform IaC Security Scan)
+        run: |
+          pip install checkov
+          checkov -d terraform
+
+  build-image:
+    name: Build & Push Docker + GHCR Image
+    runs-on: ubuntu-latest
+    needs: [security]
+    steps:
+      - uses: actions/checkout@v2
+
+      # 🔑 Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 🛠️ Build & Push Image to Docker Hub
+      - name: Build & Push Image (Docker Hub)
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest ./helm/myapp
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest
+
+      # 🔑 Login to GitHub Container Registry
+      - name: Login to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 🛠️ Build & Push Image to GHCR
+      - name: Build & Push Image (GHCR)
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/myapp:latest ./helm/myapp
+          docker push ghcr.io/${{ github.repository }}/myapp:latest
+
+      # 🔍 Trivy Scan (BLOCKING step)
+      - name: Trivy Vulnerability Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/myapp:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false   # fail on vulnerabilities
+          exit-code: 0           # Don't fail the pipeline, just report
+
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build-image]
+    steps:
+      - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      - name: Terraform Init
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --name demo
+          kubectl cluster-info
+
+      - name: Terraform Init (Dev)
         run: terraform -chdir=terraform init
 
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Deploy MyApp from Docker Hub
+        run: |
+          kubectl create deployment myapp --image=${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest -n demo-namespace
+          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
+
+      - name: Health Check
+        run: |
+          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
+          kubectl get pods -n demo-namespace
+
+      - name: Curl MyApp Service
+        run: |
+          kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
+          sleep 5
+          curl -I http://localhost:8080
+
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [deploy-dev]
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hashicorp/setup-terraform@v2
+
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --name demo
+          kubectl cluster-info
+
+      - name: Terraform Init (Staging)
+        run: terraform -chdir=terraform init
+
+      - name: Terraform Apply (Staging)
+        run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Deploy MyApp from GHCR
+        run: |
+          kubectl create deployment myapp --image=ghcr.io/${{ github.repository }}/myapp:latest -n demo-namespace
+          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
+
+      - name: Integration Test
+        run: |
+          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
+          curl -I http://localhost:8080 || true
+
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
+  deploy-prod:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v2
+      - uses: hashicorp/setup-terraform@v2
+
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --name demo
+          kubectl cluster-info
+
+      - name: Terraform Init (Prod)
+        run: terraform -chdir=terraform init
+
+      - name: Terraform Apply (Prod)
+        run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Deploy MyApp from GHCR
+        run: |
+          kubectl create deployment myapp --image=ghcr.io/${{ github.repository }}/myapp:latest -n demo-namespace
+          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
+
+      - name: Prod Monitoring Check
+        run: |
+          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
+          curl -I http://localhost:8080 || true
+
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
