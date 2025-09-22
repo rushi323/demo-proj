@@ -1,11 +1,11 @@
 name: Terraform Multi-Env Pipeline with KinD
 
 on:
-  pull_request:
+  pull_request:     # PRs still trigger plan for review
     branches: [ "main" ]
-  push:
+  push:             # Any branch push triggers full pipeline
     branches:
-      - "*"   # run on any branch for testing
+      - "*"
 
 jobs:
   validate:
@@ -27,15 +27,14 @@ jobs:
           tflint --chdir=terraform
 
   plan:
-    name: Terraform Plan (PR Review)
+    name: Terraform Plan
     runs-on: ubuntu-latest
-    needs: [validate]
-    if: github.event_name == 'pull_request'
+    needs: [validate]   # Always runs after validate
     steps:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Spin up KinD cluster for plan
+      # Spin up KinD cluster
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
@@ -53,13 +52,11 @@ jobs:
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    needs: [validate]
-    if: startsWith(github.ref, 'refs/heads/')
+    needs: [plan]
     steps:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Spin up KinD cluster for dev
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
@@ -81,14 +78,12 @@ jobs:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [deploy-dev]
-    if: startsWith(github.ref, 'refs/heads/')
     environment:
       name: staging
     steps:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Spin up KinD cluster for staging
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
@@ -110,14 +105,12 @@ jobs:
     name: Deploy to Prod
     runs-on: ubuntu-latest
     needs: [deploy-staging]
-    if: startsWith(github.ref, 'refs/heads/')
     environment:
       name: production
     steps:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Spin up KinD cluster for prod
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64

@@ -8,3 +8,7 @@ terraform {
     }
   }
 }
+
+provider "kubernetes" {
+  config_path = "/home/runner/.kube/config"  # works on GitHub runner with KinD
+}
