@@ -4,7 +4,8 @@ on:
   pull_request:
     branches: [ "main" ]   # PRs trigger validation + plan
   push:
-    branches: [ "main" ]   # merge to main triggers dev → staging → prod
+    branches:
+      - "*"                # Any branch push will trigger pipeline
 
 jobs:
   validate:
@@ -23,7 +24,7 @@ jobs:
       - name: TFLint (Static Analysis)
         run: |
           curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-          tflint --chdir=terraform   # ✅ FIXED
+          tflint --chdir=terraform
 
   plan:
     name: Terraform Plan (PR Review)
@@ -42,7 +43,7 @@ jobs:
     name: Deploy to Dev
     runs-on: ubuntu-latest
     needs: [validate]
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/')
     steps:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
@@ -69,6 +70,7 @@ jobs:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [deploy-dev]
+    if: startsWith(github.ref, 'refs/heads/')
     environment:
       name: staging
     steps:
@@ -88,6 +90,7 @@ jobs:
     name: Deploy to Prod
     runs-on: ubuntu-latest
     needs: [deploy-staging]
+    if: startsWith(github.ref, 'refs/heads/')
     environment:
       name: production
     steps:
