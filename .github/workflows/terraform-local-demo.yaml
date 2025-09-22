@@ -1,4 +1,4 @@
-name: Terraform Multi-Env Pipeline with KinD + Security + Nginx Test
+name: Terraform Multi-Env Pipeline with KinD + Security + Nginx Test + Cleanup
 
 on:
   pull_request:
@@ -59,6 +59,10 @@ jobs:
       - name: Terraform Plan
         run: terraform -chdir=terraform plan -input=false
 
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
@@ -97,6 +101,10 @@ jobs:
           sleep 5
           curl -I http://localhost:8080
 
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
   image-scan:
     name: Container Security Scan (Trivy)
     runs-on: ubuntu-latest
@@ -104,7 +112,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # Authenticate to GitHub Container Registry
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -112,13 +119,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build & Push Image
       - name: Build & Push Image
         run: |
           docker build -t ghcr.io/${{ github.repository }}/myapp:latest ./helm/myapp
           docker push ghcr.io/${{ github.repository }}/myapp:latest
 
-      # Scan pushed image with Trivy
       - uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository }}/myapp:latest
@@ -165,6 +170,10 @@ jobs:
           sleep 5
           curl -I http://localhost:8080
 
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
   deploy-prod:
     name: Deploy to Prod
     runs-on: ubuntu-latest
@@ -204,3 +213,7 @@ jobs:
           kubectl port-forward svc/nginx 8080:80 -n demo-namespace &
           sleep 5
           curl -I http://localhost:8080
+
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
