@@ -23,7 +23,7 @@ jobs:
       - name: TFLint (Static Analysis)
         run: |
           curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-          tflint terraform/
+          tflint --chdir=terraform   # ✅ FIXED
 
   plan:
     name: Terraform Plan (PR Review)
@@ -75,7 +75,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Reuse KinD cluster (already running from dev job)
       - name: Terraform Init (Staging)
         run: terraform -chdir=terraform init
 
@@ -95,7 +94,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: hashicorp/setup-terraform@v2
 
-      # Same KinD cluster
       - name: Terraform Init (Prod)
         run: terraform -chdir=terraform init
 
