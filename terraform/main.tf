@@ -3,3 +3,4 @@ resource "kubernetes_namespace" "demo" {
     name = var.namespace
   }
 }
+#test
