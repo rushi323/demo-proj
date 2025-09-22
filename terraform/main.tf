@@ -16,3 +16,5 @@ resource "kubernetes_namespace" "demo" {
     name = "demo-namespace"
   }
 }
+
+# test comment
