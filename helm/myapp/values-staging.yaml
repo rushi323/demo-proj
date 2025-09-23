@@ -5,6 +5,3 @@ image:
 service:
   type: NodePort   # change to LoadBalancer if using cloud cluster
   port: 80
-env:
-  DB_USER: staging_user
-  DB_PASS: staging_pass

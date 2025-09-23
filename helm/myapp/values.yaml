@@ -5,6 +5,3 @@ image:
 service:
   type: NodePort
   port: 80
-env:
-  DB_USER: ""
-  DB_PASS: ""

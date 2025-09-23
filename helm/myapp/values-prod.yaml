@@ -5,6 +5,3 @@ image:
 service:
   type: LoadBalancer
   port: 80
-env:
-  DB_USER: prod_user
-  DB_PASS: prod_pass

@@ -1,8 +1,7 @@
-replicaCount: 2
+replicaCount: 1
 image:
-  repository: docker.io/rushireddy007/myapp
-  tag: "latest"
-
+  repository: ghcr.io/rushi323/demo-proj/myapp
+  tag: latest
 service:
-  type: ClusterIP
+  type: NodePort
   port: 80
