@@ -85,6 +85,10 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      # ✅ FIX: Added terraform init
+      - name: Terraform Init (Dev)
+        run: terraform -chdir=terraform init -input=false
+
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
@@ -138,6 +142,10 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      # ✅ FIX: Added terraform init
+      - name: Terraform Init (Staging)
+        run: terraform -chdir=terraform init -input=false
+
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
@@ -149,7 +157,7 @@ jobs:
             repository: ghcr.io/${{ github.repository }}/myapp
             tag: latest
           service:
-            type: NodePort   # change to LoadBalancer if using real cloud k8s
+            type: NodePort
             port: 80
           env:
             DB_USER: "${{ secrets.STAGING_DB_USER }}"
@@ -191,6 +199,10 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      # ✅ FIX: Added terraform init
+      - name: Terraform Init (Prod)
+        run: terraform -chdir=terraform init -input=false
+
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
@@ -202,7 +214,7 @@ jobs:
             repository: ghcr.io/${{ github.repository }}/myapp
             tag: latest
           service:
-            type: LoadBalancer   # use NodePort if still on KinD
+            type: LoadBalancer   # change if needed
             port: 80
           env:
             DB_USER: "${{ secrets.PROD_DB_USER }}"
