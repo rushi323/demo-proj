@@ -91,16 +91,16 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Ensure Dev secrets exist
       - name: Check Dev secrets
         run: |
           if [ -z "${{ secrets.DEV_DB_USER }}" ] || [ -z "${{ secrets.DEV_DB_PASS }}" ]; then
-            echo "❌ Missing DEV secrets (DEV_DB_USER / DEV_DB_PASS)!"
+            echo "❌ Missing DEV secrets!"
             exit 1
           fi
 
       - name: Helm Deploy (Dev)
         run: |
+          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-dev.yaml \
@@ -139,16 +139,16 @@ jobs:
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Ensure Staging secrets exist
       - name: Check Staging secrets
         run: |
           if [ -z "${{ secrets.STAGING_DB_USER }}" ] || [ -z "${{ secrets.STAGING_DB_PASS }}" ]; then
-            echo "❌ Missing STAGING secrets (STAGING_DB_USER / STAGING_DB_PASS)!"
+            echo "❌ Missing STAGING secrets!"
             exit 1
           fi
 
       - name: Helm Deploy (Staging)
         run: |
+          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-staging.yaml \
@@ -187,16 +187,16 @@ jobs:
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Ensure Prod secrets exist
       - name: Check Prod secrets
         run: |
           if [ -z "${{ secrets.PROD_DB_USER }}" ] || [ -z "${{ secrets.PROD_DB_PASS }}" ]; then
-            echo "❌ Missing PROD secrets (PROD_DB_USER / PROD_DB_PASS)!"
+            echo "❌ Missing PROD secrets!"
             exit 1
           fi
 
       - name: Helm Deploy (Prod)
         run: |
+          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-prod.yaml \
