@@ -103,7 +103,7 @@ jobs:
 
       - name: Helm Deploy (Dev)
         run: |
-          helm upgrade --install myapp helm/myapp \
+          helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-dev.yaml \
             --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
@@ -153,7 +153,7 @@ jobs:
 
       - name: Helm Deploy (Staging)
         run: |
-          helm upgrade --install myapp helm/myapp \
+          helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-staging.yaml \
             --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
@@ -203,7 +203,7 @@ jobs:
 
       - name: Helm Deploy (Prod)
         run: |
-          helm upgrade --install myapp helm/myapp \
+          helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-prod.yaml \
             --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
