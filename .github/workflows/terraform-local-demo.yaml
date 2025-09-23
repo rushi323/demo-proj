@@ -1,15 +1,15 @@
-name: Terraform Multi-Env with KinD + Terraform + Helm (Env Values via GitHub Secrets)
+name: Terraform Multi-Env with KinD + Terraform + Helm
 
 on:
   pull_request:
     branches: [ "main" ]
   push:
     branches:
-      - "*"   # run on any branch push for demo
+      - "*"   # run on any branch push
 
 permissions:
   contents: read
-  packages: write
+  packages: write    # needed to push to GHCR
 
 jobs:
   validate:
@@ -91,28 +91,15 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Create Helm values (Dev) from GitHub Secrets
-        run: |
-          cat > helm/myapp/values-dev.ci.yaml <<'YAML'
-          replicaCount: 1
-          image:
-            repository: ghcr.io/${{ github.repository }}/myapp
-            tag: latest
-          service:
-            type: NodePort
-            port: 80
-          env:
-            DB_USER: "${{ secrets.DEV_DB_USER }}"
-            DB_PASS: "${{ secrets.DEV_DB_PASS }}"
-          YAML
-
       - name: Helm Deploy (Dev)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-dev.ci.yaml
+            -f helm/myapp/values-dev.yaml \
+            --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
+            --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
 
-      - name: Curl Service (Dev)
+      - name: Curl Service (port-forward)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
@@ -144,28 +131,15 @@ jobs:
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Create Helm values (Staging) from GitHub Secrets
-        run: |
-          cat > helm/myapp/values-staging.ci.yaml <<'YAML'
-          replicaCount: 2
-          image:
-            repository: ghcr.io/${{ github.repository }}/myapp
-            tag: latest
-          service:
-            type: NodePort
-            port: 80
-          env:
-            DB_USER: "${{ secrets.STAGING_DB_USER }}"
-            DB_PASS: "${{ secrets.STAGING_DB_PASS }}"
-          YAML
-
       - name: Helm Deploy (Staging)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-staging.ci.yaml
+            -f helm/myapp/values-staging.yaml \
+            --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
+            --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
 
-      - name: Curl Service (Staging)
+      - name: Curl Service (port-forward)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
@@ -197,28 +171,15 @@ jobs:
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Create Helm values (Prod) from GitHub Secrets
-        run: |
-          cat > helm/myapp/values-prod.ci.yaml <<'YAML'
-          replicaCount: 3
-          image:
-            repository: ghcr.io/${{ github.repository }}/myapp
-            tag: latest
-          service:
-            type: LoadBalancer
-            port: 80
-          env:
-            DB_USER: "${{ secrets.PROD_DB_USER }}"
-            DB_PASS: "${{ secrets.PROD_DB_PASS }}"
-          YAML
-
       - name: Helm Deploy (Prod)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-prod.ci.yaml
+            -f helm/myapp/values-prod.yaml \
+            --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
+            --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
 
-      - name: Curl Service (Prod)
+      - name: Curl Service (port-forward)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
