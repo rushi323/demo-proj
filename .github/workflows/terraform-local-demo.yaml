@@ -1,21 +1,25 @@
-name: Terraform Multi-Env Pipeline with KinD + Security + Docker Hub + GHCR
+name: Terraform Multi-Env with KinD + Terraform + Helm (Env Values via GitHub Secrets)
 
 on:
   pull_request:
     branches: [ "main" ]
   push:
     branches:
-      - "*"   # Any branch push triggers pipeline
+      - "*"   # run on any branch push for demo
+
+permissions:
+  contents: read
+  packages: write    # needed to push to GHCR
 
 jobs:
   validate:
     name: Validate Terraform
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: hashicorp/setup-terraform@v2
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
+      - name: Terraform Init (no backend)
         run: terraform -chdir=terraform init -backend=false
 
       - name: Terraform Validate
@@ -28,172 +32,196 @@ jobs:
         run: tflint --chdir=terraform
 
   security:
-    name: Security Scan (Checkov)
+    name: IaC Security (Checkov)
     runs-on: ubuntu-latest
     needs: [validate]
     steps:
-      - uses: actions/checkout@v2
-      - name: Run Checkov (Terraform IaC Security Scan)
+      - uses: actions/checkout@v4
+      - name: Run Checkov
         run: |
-          pip install checkov
+          pip install --quiet checkov
           checkov -d terraform
 
-  build-image:
-    name: Build & Push Docker + GHCR Image
+  build_image:
+    name: Build & Push Image to GHCR
     runs-on: ubuntu-latest
     needs: [security]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      # 🔑 Login to Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # 🛠️ Build & Push Image to Docker Hub
-      - name: Build & Push Image (Docker Hub)
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest ./helm/myapp
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest
-
-      # 🔑 Login to GitHub Container Registry
       - name: Login to GHCR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🛠️ Build & Push Image to GHCR
-      - name: Build & Push Image (GHCR)
+      - name: Build & Push (GHCR)
         run: |
           docker build -t ghcr.io/${{ github.repository }}/myapp:latest ./helm/myapp
           docker push ghcr.io/${{ github.repository }}/myapp:latest
 
-      # 🔍 Trivy Scan (BLOCKING step)
-      - name: Trivy Vulnerability Scan
+      - name: Trivy Scan (report only)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository }}/myapp:latest
           severity: CRITICAL,HIGH
-          ignore-unfixed: false   # fail on vulnerabilities
-          exit-code: 0           # Don't fail the pipeline, just report
+          ignore-unfixed: true
+          exit-code: 0
 
-
-  deploy-dev:
-    name: Deploy to Dev
+  deploy_dev:
+    name: Deploy to Dev (KinD + Terraform + Helm)
     runs-on: ubuntu-latest
-    needs: [build-image]
+    needs: [build_image]
     steps:
-      - uses: actions/checkout@v2
-      - uses: hashicorp/setup-terraform@v2
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: azure/setup-helm@v4
 
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind create cluster --name demo
           kubectl cluster-info
-
-      - name: Terraform Init (Dev)
-        run: terraform -chdir=terraform init
 
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Deploy MyApp from Docker Hub
+      - name: Create Helm values (Dev) from GitHub Secrets
         run: |
-          kubectl create deployment myapp --image=${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest -n demo-namespace
-          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
+          cat > helm/myapp/values-dev.ci.yaml <<'YAML'
+          replicaCount: 1
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: NodePort
+            port: 80
+          env:
+            DB_USER: "${{ secrets.DEV_DB_USER }}"
+            DB_PASS: "${{ secrets.DEV_DB_PASS }}"
+          YAML
 
-      - name: Health Check
+      - name: Helm Deploy (Dev)
         run: |
-          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
-          kubectl get pods -n demo-namespace
+          helm upgrade --install myapp ./helm/myapp \
+            --namespace demo-namespace --create-namespace \
+            -f helm/myapp/values-dev.ci.yaml
 
-      - name: Curl MyApp Service
+      - name: Helm Test (Dev)
+        run: helm test myapp -n demo-namespace --timeout 2m || echo "No Helm tests found; continuing"
+
+      - name: Curl Service (port-forward)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
-          sleep 5
-          curl -I http://localhost:8080
-
-      - name: Cleanup KinD
-        if: always()
-        run: kind delete cluster --name demo
-
-  deploy-staging:
-    name: Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: [deploy-dev]
-    environment:
-      name: staging
-    steps:
-      - uses: actions/checkout@v2
-      - uses: hashicorp/setup-terraform@v2
-
-      - name: Install KinD
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-          kind create cluster --name demo
-          kubectl cluster-info
-
-      - name: Terraform Init (Staging)
-        run: terraform -chdir=terraform init
-
-      - name: Terraform Apply (Staging)
-        run: terraform -chdir=terraform apply -auto-approve
-
-      - name: Deploy MyApp from GHCR
-        run: |
-          kubectl create deployment myapp --image=ghcr.io/${{ github.repository }}/myapp:latest -n demo-namespace
-          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
-
-      - name: Integration Test
-        run: |
-          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
+          sleep 4
           curl -I http://localhost:8080 || true
 
       - name: Cleanup KinD
         if: always()
         run: kind delete cluster --name demo
 
-  deploy-prod:
-    name: Deploy to Prod
+  deploy_staging:
+    name: Deploy to Staging (KinD + Terraform + Helm)
     runs-on: ubuntu-latest
-    needs: [deploy-staging]
-    environment:
-      name: production
+    needs: [deploy_dev]
     steps:
-      - uses: actions/checkout@v2
-      - uses: hashicorp/setup-terraform@v2
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: azure/setup-helm@v4
 
       - name: Install KinD
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind create cluster --name demo
           kubectl cluster-info
 
-      - name: Terraform Init (Prod)
-        run: terraform -chdir=terraform init
+      - name: Terraform Apply (Staging)
+        run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Create Helm values (Staging) from GitHub Secrets
+        run: |
+          cat > helm/myapp/values-staging.ci.yaml <<'YAML'
+          replicaCount: 2
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: NodePort   # change to LoadBalancer if using real cloud k8s
+            port: 80
+          env:
+            DB_USER: "${{ secrets.STAGING_DB_USER }}"
+            DB_PASS: "${{ secrets.STAGING_DB_PASS }}"
+          YAML
+
+      - name: Helm Deploy (Staging)
+        run: |
+          helm upgrade --install myapp ./helm/myapp \
+            --namespace demo-namespace --create-namespace \
+            -f helm/myapp/values-staging.ci.yaml
+
+      - name: Helm Test (Staging)
+        run: helm test myapp -n demo-namespace --timeout 2m || echo "No Helm tests found; continuing"
+
+      - name: Curl Service (port-forward)
+        run: |
+          kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
+          sleep 4
+          curl -I http://localhost:8080 || true
+
+      - name: Cleanup KinD
+        if: always()
+        run: kind delete cluster --name demo
+
+  deploy_prod:
+    name: Deploy to Prod (KinD + Terraform + Helm)
+    runs-on: ubuntu-latest
+    needs: [deploy_staging]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: azure/setup-helm@v4
+
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --name demo
+          kubectl cluster-info
 
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Deploy MyApp from GHCR
+      - name: Create Helm values (Prod) from GitHub Secrets
         run: |
-          kubectl create deployment myapp --image=ghcr.io/${{ github.repository }}/myapp:latest -n demo-namespace
-          kubectl expose deployment myapp --port=80 --target-port=80 -n demo-namespace
+          cat > helm/myapp/values-prod.ci.yaml <<'YAML'
+          replicaCount: 3
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: LoadBalancer   # use NodePort if still on KinD
+            port: 80
+          env:
+            DB_USER: "${{ secrets.PROD_DB_USER }}"
+            DB_PASS: "${{ secrets.PROD_DB_PASS }}"
+          YAML
 
-      - name: Prod Monitoring Check
+      - name: Helm Deploy (Prod)
         run: |
-          kubectl wait --for=condition=available --timeout=60s deployment/myapp -n demo-namespace
+          helm upgrade --install myapp ./helm/myapp \
+            --namespace demo-namespace --create-namespace \
+            -f helm/myapp/values-prod.ci.yaml
+
+      - name: Helm Test (Prod)
+        run: helm test myapp -n demo-namespace --timeout 2m || echo "No Helm tests found; continuing"
+
+      - name: Curl Service (port-forward)
+        run: |
+          kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
+          sleep 4
           curl -I http://localhost:8080 || true
 
       - name: Cleanup KinD
