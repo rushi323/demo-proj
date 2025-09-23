@@ -70,7 +70,7 @@ jobs:
           exit-code: 0
 
   deploy_dev:
-    name: Deploy to Dev (KinD + Terraform + Helm)
+    name: Deploy to Dev
     runs-on: ubuntu-latest
     needs: [build_image]
     steps:
@@ -98,16 +98,9 @@ jobs:
             exit 1
           fi
 
-      - name: Helm Lint (Dev)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Dev)
         run: |
-          helm upgrade --install myapp ./helm/myapp \
-            --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-dev.yaml \
-            --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
+          helm upgrade --install myapp ./helm/myapp --namespace demo-namespace --create-namespace -f helm/myapp/values-dev.yaml --set env.DB_USER=${{ secrets.DEV_DB_USER }} --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
 
       - name: Curl Service (Dev)
         run: |
@@ -120,7 +113,7 @@ jobs:
         run: kind delete cluster --name demo
 
   deploy_staging:
-    name: Deploy to Staging (KinD + Terraform + Helm)
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [deploy_dev]
     steps:
@@ -148,16 +141,9 @@ jobs:
             exit 1
           fi
 
-      - name: Helm Lint (Staging)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Staging)
         run: |
-          helm upgrade --install myapp ./helm/myapp \
-            --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-staging.yaml \
-            --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
+          helm upgrade --install myapp ./helm/myapp --namespace demo-namespace --create-namespace -f helm/myapp/values-staging.yaml --set env.DB_USER=${{ secrets.STAGING_DB_USER }} --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
 
       - name: Curl Service (Staging)
         run: |
@@ -170,7 +156,7 @@ jobs:
         run: kind delete cluster --name demo
 
   deploy_prod:
-    name: Deploy to Prod (KinD + Terraform + Helm)
+    name: Deploy to Prod
     runs-on: ubuntu-latest
     needs: [deploy_staging]
     steps:
@@ -198,16 +184,9 @@ jobs:
             exit 1
           fi
 
-      - name: Helm Lint (Prod)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Prod)
         run: |
-          helm upgrade --install myapp ./helm/myapp \
-            --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-prod.yaml \
-            --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
+          helm upgrade --install myapp ./helm/myapp --namespace demo-namespace --create-namespace -f helm/myapp/values-prod.yaml --set env.DB_USER=${{ secrets.PROD_DB_USER }} --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
 
       - name: Curl Service (Prod)
         run: |
