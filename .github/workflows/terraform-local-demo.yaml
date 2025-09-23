@@ -91,29 +91,21 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Check Dev secrets
-        run: |
-          if [ -z "${{ secrets.DEV_DB_USER }}" ] || [ -z "${{ secrets.DEV_DB_PASS }}" ]; then
-            echo "❌ Missing DEV secrets!"
-            exit 1
-          fi
-
-      - name: Helm Lint (Dev)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Dev)
         run: |
+          helm lint ./helm/myapp
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-dev.yaml \
             --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
             --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
 
-      - name: Curl Service (Dev)
+      - name: Integration Test (Dev)
         run: |
+          kubectl rollout status deployment/myapp -n demo-namespace --timeout=60s
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
-          sleep 4
-          curl -I http://localhost:8080 || true
+          sleep 5
+          curl -I http://localhost:8080 || exit 1
 
       - name: Cleanup KinD
         if: always()
@@ -141,29 +133,21 @@ jobs:
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Check Staging secrets
-        run: |
-          if [ -z "${{ secrets.STAGING_DB_USER }}" ] || [ -z "${{ secrets.STAGING_DB_PASS }}" ]; then
-            echo "❌ Missing STAGING secrets!"
-            exit 1
-          fi
-
-      - name: Helm Lint (Staging)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Staging)
         run: |
+          helm lint ./helm/myapp
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-staging.yaml \
             --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
             --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
 
-      - name: Curl Service (Staging)
+      - name: Integration Test (Staging)
         run: |
+          kubectl rollout status deployment/myapp -n demo-namespace --timeout=60s
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
-          sleep 4
-          curl -I http://localhost:8080 || true
+          sleep 5
+          curl -I http://localhost:8080 || exit 1
 
       - name: Cleanup KinD
         if: always()
@@ -191,29 +175,21 @@ jobs:
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
-      - name: Check Prod secrets
-        run: |
-          if [ -z "${{ secrets.PROD_DB_USER }}" ] || [ -z "${{ secrets.PROD_DB_PASS }}" ]; then
-            echo "❌ Missing PROD secrets!"
-            exit 1
-          fi
-
-      - name: Helm Lint (Prod)
-        run: helm lint ./helm/myapp
-
       - name: Helm Deploy (Prod)
         run: |
+          helm lint ./helm/myapp
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-prod.yaml \
             --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
             --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
 
-      - name: Curl Service (Prod)
+      - name: Integration Test (Prod)
         run: |
+          kubectl rollout status deployment/myapp -n demo-namespace --timeout=60s
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
-          sleep 4
-          curl -I http://localhost:8080 || true
+          sleep 5
+          curl -I http://localhost:8080 || exit 1
 
       - name: Cleanup KinD
         if: always()
