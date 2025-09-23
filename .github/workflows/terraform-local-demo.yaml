@@ -98,9 +98,11 @@ jobs:
             exit 1
           fi
 
+      - name: Helm Lint (Dev)
+        run: helm lint ./helm/myapp
+
       - name: Helm Deploy (Dev)
         run: |
-          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-dev.yaml \
@@ -146,9 +148,11 @@ jobs:
             exit 1
           fi
 
+      - name: Helm Lint (Staging)
+        run: helm lint ./helm/myapp
+
       - name: Helm Deploy (Staging)
         run: |
-          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-staging.yaml \
@@ -194,9 +198,11 @@ jobs:
             exit 1
           fi
 
+      - name: Helm Lint (Prod)
+        run: helm lint ./helm/myapp
+
       - name: Helm Deploy (Prod)
         run: |
-          cd $GITHUB_WORKSPACE
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-prod.yaml \
