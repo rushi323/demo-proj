@@ -91,7 +91,7 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Check Dev secrets
+      # ✅ Ensure Dev secrets exist
       - name: Check Dev secrets
         run: |
           if [ -z "${{ secrets.DEV_DB_USER }}" ] || [ -z "${{ secrets.DEV_DB_PASS }}" ]; then
@@ -139,7 +139,7 @@ jobs:
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Check Staging secrets
+      # ✅ Ensure Staging secrets exist
       - name: Check Staging secrets
         run: |
           if [ -z "${{ secrets.STAGING_DB_USER }}" ] || [ -z "${{ secrets.STAGING_DB_PASS }}" ]; then
@@ -187,7 +187,7 @@ jobs:
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
-      # ✅ Check Prod secrets
+      # ✅ Ensure Prod secrets exist
       - name: Check Prod secrets
         run: |
           if [ -z "${{ secrets.PROD_DB_USER }}" ] || [ -z "${{ secrets.PROD_DB_PASS }}" ]; then
