@@ -91,6 +91,14 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
 
+      # ✅ Check Dev secrets
+      - name: Check Dev secrets
+        run: |
+          if [ -z "${{ secrets.DEV_DB_USER }}" ] || [ -z "${{ secrets.DEV_DB_PASS }}" ]; then
+            echo "❌ Missing DEV secrets (DEV_DB_USER / DEV_DB_PASS)!"
+            exit 1
+          fi
+
       - name: Helm Deploy (Dev)
         run: |
           helm upgrade --install myapp ./helm/myapp \
@@ -99,7 +107,7 @@ jobs:
             --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
             --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
 
-      - name: Curl Service (port-forward)
+      - name: Curl Service (Dev)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
@@ -131,6 +139,14 @@ jobs:
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
 
+      # ✅ Check Staging secrets
+      - name: Check Staging secrets
+        run: |
+          if [ -z "${{ secrets.STAGING_DB_USER }}" ] || [ -z "${{ secrets.STAGING_DB_PASS }}" ]; then
+            echo "❌ Missing STAGING secrets (STAGING_DB_USER / STAGING_DB_PASS)!"
+            exit 1
+          fi
+
       - name: Helm Deploy (Staging)
         run: |
           helm upgrade --install myapp ./helm/myapp \
@@ -139,7 +155,7 @@ jobs:
             --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
             --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
 
-      - name: Curl Service (port-forward)
+      - name: Curl Service (Staging)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
@@ -171,6 +187,14 @@ jobs:
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
 
+      # ✅ Check Prod secrets
+      - name: Check Prod secrets
+        run: |
+          if [ -z "${{ secrets.PROD_DB_USER }}" ] || [ -z "${{ secrets.PROD_DB_PASS }}" ]; then
+            echo "❌ Missing PROD secrets (PROD_DB_USER / PROD_DB_PASS)!"
+            exit 1
+          fi
+
       - name: Helm Deploy (Prod)
         run: |
           helm upgrade --install myapp ./helm/myapp \
@@ -179,7 +203,7 @@ jobs:
             --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
             --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
 
-      - name: Curl Service (port-forward)
+      - name: Curl Service (Prod)
         run: |
           kubectl port-forward svc/myapp 8080:80 -n demo-namespace &
           sleep 4
