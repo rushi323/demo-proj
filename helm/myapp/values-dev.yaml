@@ -2,6 +2,11 @@ replicaCount: 1
 image:
   repository: ghcr.io/rushi323/demo-proj/myapp
   tag: latest
+
 service:
   type: NodePort
   port: 80
+
+env:
+  DB_USER: ""   # Injected at runtime from GitHub Secrets
+  DB_PASS: ""   # Injected at runtime from GitHub Secrets

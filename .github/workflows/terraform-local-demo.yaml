@@ -1,4 +1,4 @@
-name: Terraform Multi-Env with KinD + Terraform + Helm (Secrets via GitHub)
+name: Terraform Multi-Env with KinD + Terraform + Helm (Env Values via GitHub Secrets)
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 
 permissions:
   contents: read
-  packages: write    # needed for GHCR push
+  packages: write
 
 jobs:
   validate:
@@ -85,16 +85,32 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      - name: Terraform Init (Dev)
+        run: terraform -chdir=terraform init
+
       - name: Terraform Apply (Dev)
         run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Create Helm values (Dev) from GitHub Secrets
+        run: |
+          cat > helm/myapp/values-dev.ci.yaml <<'YAML'
+          replicaCount: 1
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: NodePort
+            port: 80
+          env:
+            DB_USER: "${{ secrets.DEV_DB_USER }}"
+            DB_PASS: "${{ secrets.DEV_DB_PASS }}"
+          YAML
 
       - name: Helm Deploy (Dev)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-dev.yaml \
-            --set env.DB_USER=${{ secrets.DEV_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.DEV_DB_PASS }}
+            -f helm/myapp/values-dev.ci.yaml
 
       - name: Curl Service (Dev)
         run: |
@@ -110,8 +126,6 @@ jobs:
     name: Deploy to Staging (KinD + Terraform + Helm)
     runs-on: ubuntu-latest
     needs: [deploy_dev]
-    environment:
-      name: staging
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -124,16 +138,32 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      - name: Terraform Init (Staging)
+        run: terraform -chdir=terraform init
+
       - name: Terraform Apply (Staging)
         run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Create Helm values (Staging) from GitHub Secrets
+        run: |
+          cat > helm/myapp/values-staging.ci.yaml <<'YAML'
+          replicaCount: 2
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: NodePort
+            port: 80
+          env:
+            DB_USER: "${{ secrets.STAGING_DB_USER }}"
+            DB_PASS: "${{ secrets.STAGING_DB_PASS }}"
+          YAML
 
       - name: Helm Deploy (Staging)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-staging.yaml \
-            --set env.DB_USER=${{ secrets.STAGING_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.STAGING_DB_PASS }}
+            -f helm/myapp/values-staging.ci.yaml
 
       - name: Curl Service (Staging)
         run: |
@@ -149,8 +179,6 @@ jobs:
     name: Deploy to Prod (KinD + Terraform + Helm)
     runs-on: ubuntu-latest
     needs: [deploy_staging]
-    environment:
-      name: production
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -163,16 +191,32 @@ jobs:
           kind create cluster --name demo
           kubectl cluster-info
 
+      - name: Terraform Init (Prod)
+        run: terraform -chdir=terraform init
+
       - name: Terraform Apply (Prod)
         run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Create Helm values (Prod) from GitHub Secrets
+        run: |
+          cat > helm/myapp/values-prod.ci.yaml <<'YAML'
+          replicaCount: 3
+          image:
+            repository: ghcr.io/${{ github.repository }}/myapp
+            tag: latest
+          service:
+            type: LoadBalancer
+            port: 80
+          env:
+            DB_USER: "${{ secrets.PROD_DB_USER }}"
+            DB_PASS: "${{ secrets.PROD_DB_PASS }}"
+          YAML
 
       - name: Helm Deploy (Prod)
         run: |
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
-            -f helm/myapp/values-prod.yaml \
-            --set env.DB_USER=${{ secrets.PROD_DB_USER }} \
-            --set env.DB_PASS=${{ secrets.PROD_DB_PASS }}
+            -f helm/myapp/values-prod.ci.yaml
 
       - name: Curl Service (Prod)
         run: |
