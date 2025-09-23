@@ -101,7 +101,6 @@ jobs:
       - name: Helm Deploy (Dev)
         run: |
           cd $GITHUB_WORKSPACE
-          ls -R helm/myapp
           helm upgrade --install myapp ./helm/myapp \
             --namespace demo-namespace --create-namespace \
             -f helm/myapp/values-dev.yaml \
